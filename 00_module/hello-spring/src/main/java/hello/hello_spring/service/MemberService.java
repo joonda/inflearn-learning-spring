@@ -10,6 +10,7 @@ public class MemberService {
 
     private final MemberRepository memberRepository;
 
+    // 의존관계 주입
     public MemberService(MemberRepository memberRepository) {
         this.memberRepository = memberRepository;
     }
