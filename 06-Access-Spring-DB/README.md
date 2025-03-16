@@ -31,3 +31,159 @@ insert into member(name) values('spring')
 
 * src 바깥 쪽 경로에 `sql` > `ddl.sql` 생성, table 생성 관리에 매우 유용하다
 ![ddl_sql](./img/ddl_sql.png)
+
+### 2. 순수 JDBC
+#### `build.gradle`에 라이브러리 추가
+* dependencies에 jdbc, h2 database 관련 라이브러리 추가
+```
+implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+runtimeOnly 'com.h2database:h2'
+```
+
+#### `application.properties`
+```
+spring.datasource.url=jdbc:h2:tcp://localhost/~/test
+spring.datasource.driver-class-name=org.h2.Driver
+```
+* url에 JDBC 주소, driver를 지정
+    * 만약 빨간색 이름이 뜬다면 `build.gradle` 이동, 코끼리 모양의 아이콘을 눌러 DB를 연결
+* 이를 통해 DB 기능이 연결됨.
+
+#### `JdbcMemberRepository`
+```java
+public class JdbcMemberRepository implements MemberRepository {
+    @Override
+    public Member save(Member member) {
+        return null;
+    }
+
+    @Override
+    public Optional<Member> findById(Long id) {
+        return Optional.empty();
+    }
+
+    @Override
+    public Optional<Member> findByName(String name) {
+        return Optional.empty();
+    }
+
+    @Override
+    public List<Member> findAll() {
+        return List.of();
+    }
+}
+```
+* 그냥 안쓰니까 나중에.. 필요하면 찾아쓰자..
+
+### 3. 스프링 통합 테스트
+#### `MemberServiceIntegrationTest`
+```java
+// ... 생략
+@SpringBootTest
+@Transactional
+public class MemberServiceIntegrationTest {
+
+    @Autowired
+    MemberService memberService;
+
+    @Autowired
+    MemberRepository memberRepository;
+
+    @Test
+    void join() throws SQLException {
+        // given
+        Member member = new Member();
+        member.setName("hello");
+
+        // when
+        Long saveId = memberService.join(member);
+
+        // then
+        Member findMember = memberService.findOne(saveId).get();
+        Assertions.assertThat(member.getName()).isEqualTo(findMember.getName());
+    }
+
+    @Test
+    public void duplicateExceptions() throws SQLException {
+        // given
+        Member member1 = new Member();
+        member1.setName("spring");
+
+        Member member2 = new Member();
+        member2.setName("spring");
+
+        // when
+        memberService.join(member1);
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> memberService.join(member2));
+
+        // then
+        Assertions.assertThat(e.getMessage()).isEqualTo("이미 존재하는 회원입니다.");
+    }
+
+}
+```
+* `@SpringBootTest`로 스프링을 이용하여 테스트를 진행
+* `@Transactional`는 테스트 각각 실행 후 다시 롤백 (테스트 이전 당시로 되돌린다.)
+    * DB에 남지 않으므로 다음 테스트에 영향을 주지 않는다.
+* 이를 통합 테스트로 진행하지만, 순수자바 코드로 진행하는 단위 테스트가 더 좋은 테스트일 확률이 높다.
+    * Spring 컨테이너 없이 테스트 할 수 있도록 훈련이 필요
+
+
+### 3. JDBC Templates
+
+`JdbcTemplateMemberRepository`
+```java
+// ... 생략
+public class JdbcTemplateMemberRepository implements MemberRepository {
+
+    private final JdbcTemplate jdbcTemplate;
+
+    public JdbcTemplateMemberRepository(DataSource dataSource) {
+        jdbcTemplate = new JdbcTemplate(dataSource);
+    }
+
+    @Override
+    public Member save(Member member) {
+
+        SimpleJdbcInsert jdbcInsert = new SimpleJdbcInsert(jdbcTemplate);
+        jdbcInsert.withTableName("member").usingGeneratedKeyColumns("id");
+
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("name", member.getName());
+
+        Number key = jdbcInsert.executeAndReturnKey(new MapSqlParameterSource(parameters));
+        member.setId(key.longValue());
+
+        return member;
+    }
+
+    @Override
+    public Optional<Member> findById(Long id) {
+        List<Member> result =  jdbcTemplate.query("select * from member where id = ?", memberRowMapper(), id);
+        return result.stream().findAny();
+
+    }
+
+    @Override
+    public Optional<Member> findByName(String name) {
+        List<Member> result =  jdbcTemplate.query("select * from member where name = ?", memberRowMapper(), name);
+        return result.stream().findAny();
+    }
+
+    @Override
+    public List<Member> findAll() {
+        return jdbcTemplate.query("select * from member", memberRowMapper());
+    }
+
+    private RowMapper<Member> memberRowMapper() {
+        return (rs, rowNum) -> {
+                Member member = new Member();
+                member.setId(rs.getLong("id"));
+                member.setName(rs.getString("name"));
+
+                return member;
+        };
+    };
+}
+```
+* 이후 SpringConfig에서 해당 Repository를 사용하도록 수정!

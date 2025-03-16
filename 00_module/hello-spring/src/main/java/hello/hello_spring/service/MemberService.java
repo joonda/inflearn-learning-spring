@@ -3,6 +3,7 @@ package hello.hello_spring.service;
 import hello.hello_spring.domain.Member;
 import hello.hello_spring.repository.MemberRepository;
 
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,7 +16,7 @@ public class MemberService {
         this.memberRepository = memberRepository;
     }
 
-    public Long join(Member member) {
+    public Long join(Member member) throws SQLException {
 
         validateDuplicateMember(member); // 중복 회원 검증
         memberRepository.save(member);
