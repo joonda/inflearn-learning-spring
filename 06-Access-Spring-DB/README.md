@@ -187,3 +187,177 @@ public class JdbcTemplateMemberRepository implements MemberRepository {
 }
 ```
 * 이후 SpringConfig에서 해당 Repository를 사용하도록 수정!
+
+### 4. JPA
+
+#### `build.gradle` 에 의존성 추가
+```
+implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+```
+* 기존의 `implementation 'org.springframework.boot:spring-boot-starter-jdbc'`는 주석처리 (필요없다.)
+
+#### `application.properties` 에 설정 추가
+```
+spring.jpa.show-sql=true
+spring.jpa.hibernate.ddl-auto = none
+```
+
+#### JPA
+* 객체랑 ORM 이라는 기술
+    * Object Relational Mapping
+
+`Member`
+```java
+@Entity
+public class Member {
+
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+
+    // ... 생략 
+}
+
+```
+* `@Entity` 지정,
+* `@Id` > Primary Key, `@GeneratedValue` > Auto Increments
+
+`JpaMemberRepository`
+```java
+public class JpaMemberRepository implements MemberRepository {
+
+    private final EntityManager em;
+
+    public JpaMemberRepository(EntityManager em) {
+        this.em = em;
+    }
+
+    @Override
+    public Member save(Member member) {
+        em.persist(member);
+        return member;
+    }
+
+    @Override
+    public Optional<Member> findById(Long id) {
+        Member member = em.find(Member.class, id);
+
+        return Optional.ofNullable(member);
+    }
+
+    @Override
+    public Optional<Member> findByName(String name) {
+        List<Member> result = em.createQuery("select m from Member m where m.name = :name", Member.class)
+                .setParameter("name", name)
+                .getResultList();
+
+        return result.stream().findAny();
+    }
+
+    @Override
+    public List<Member> findAll() {
+        List<Member> result = em.createQuery("select m from Member m", Member.class).getResultList();
+        return result;
+    }
+}
+```
+* 정말 간단하게 JPA를 활용해서 진행할 수 있다!
+
+`MemberService`
+```java
+@Transactional
+public class MemberService {
+
+    private final MemberRepository memberRepository;
+
+    // 의존관계 주입
+    public MemberService(MemberRepository memberRepository) {
+        this.memberRepository = memberRepository;
+    }
+
+    public Long join(Member member) throws SQLException {
+
+        validateDuplicateMember(member); // 중복 회원 검증
+        memberRepository.save(member);
+        return member.getId();
+    }
+
+    private void validateDuplicateMember(Member member) {
+        memberRepository.findByName(member.getName())
+                .ifPresent(m -> {
+                    throw new IllegalStateException("이미 존재하는 회원입니다.");
+                });
+    }
+    // 전체 회원 조회
+    public List<Member> findMembers() {
+        return memberRepository.findAll();
+    }
+
+    public Optional<Member> findOne(Long memberId) {
+        return memberRepository.findById(memberId);
+    }
+}
+```
+* JPA는 모든 데이터 변경이 다 트랜잭션 안에서 실행이 되어야 한다.
+    * `@Transactional` 어노테이션 추가
+
+#### SpringConfig에 `return`문 추가
+```java
+@Configuration
+public class SpringConfig {
+
+    private EntityManager em;
+
+    @Autowired
+    public SpringConfig(EntityManager em) {
+        this.em = em;
+    }
+
+    @Bean
+    public MemberService memberService() {
+        return new MemberService(memberRepository());
+    }
+
+    @Bean
+    public MemberRepository memberRepository() {
+        return new JpaMemberRepository(em);
+    }
+}
+```
+* `JpaMemberRepository`를 추가한다
+
+### 5. 스프링 데이터 JPA
+* 설정은 그대로 가면 된다
+
+`SpringDataJpaMemberRepository`
+```java
+public interface SpringDataJpaMemberRepository extends JpaRepository<Member, Long>, MemberRepository {
+
+    @Override
+    Optional<Member> findByName(String name);
+}
+```
+* Annotation 없이, `JpaRepository`가 Spring Bean을 자동으로 만든다.
+
+`SpringConfig`
+```java
+@Configuration
+public class SpringConfig {
+
+    private final MemberRepository memberRepository;
+
+    @Autowired
+    public SpringConfig(MemberRepository memberRepository) {
+        this.memberRepository = memberRepository;
+    }
+
+    @Bean
+    public MemberService memberService() {
+        return new MemberService(memberRepository);
+    }
+}
+```
+* SpringDataJpa로 정말 간단하게 구현할 수 있다
+* 인터페이스만으로 CRUD를 간단하게 구현할 수 있는 것이 큰 장점
+    * 실무에서는 JPA와 스프링 데이터 JPA를 기본으로 사용, 복잡한 동적 쿼리는 QueryDSL 이라는 라이브러리 사용
+    * 아니면 JPD가 제공하는 네이티브 쿼리를 사용 or JdbcTemplate을 사용.
