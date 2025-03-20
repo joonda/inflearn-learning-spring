@@ -25,8 +25,8 @@ public class ServletApplication {
 ```
 * `ServletComponentScan`으로 서블릿을 자동 등록해준다.
 
-`src` > `main` > `java` > `hello.servlet` > `basic`
-`HelloServlet`
+* `src` > `main` > `java` > `hello.servlet` > `basic`
+    * `HelloServlet`
 
 ```java
 // ... 생략
@@ -63,8 +63,10 @@ logging.level.org.apache.coyote.http11=trace
 * logging을 찍어서 더 자세히 확인할 수 있다.
 * 단, 운영 서버에 모든 요청 정보를 다 남기면 성능저하 발생 우려, 개발 단계에서만 적용하는 것이 좋다.
 
-`src` > `main` > `webapp`
-`index.html`
+#### `webapp`
+
+* `src` > `main` > `webapp`
+    * `index.html`
 ```html
 <!DOCTYPE html>
 <html>
@@ -81,7 +83,8 @@ logging.level.org.apache.coyote.http11=trace
 ```
 * `index.html`을 `webapp`폴더 안에 넣을 시, `localhost:8080` 방문 시 웰컴 페이지 기능을 제공한다.
 
-`basic.html`
+* `src` > `main` > `webapp`
+    * `basic.html`
 ```html
 <!DOCTYPE html>
 <html>
@@ -170,17 +173,6 @@ username=kim&age=20
 `RequestHeaderServlet`
 ```java
 // ... 생략
-package hello.servlet.basic.request;
-
-import jakarta.servlet.ServletException;
-import jakarta.servlet.annotation.WebServlet;
-import jakarta.servlet.http.Cookie;
-import jakarta.servlet.http.HttpServlet;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-
-import java.io.IOException;
-
 @WebServlet(name = "requestHeaderServlet", urlPatterns = "/request-header")
 public class RequestHeaderServlet extends HttpServlet {
 
@@ -345,8 +337,8 @@ public class RequestParamServlet extends HttpServlet {
 ### 7. HTTP 요청 데이터 - POST HTML Form
 * 주로 회원 가입, 상품 주문 등에서 사용하는 방식
 
-`src` > `main` > `webapp` > `basic`
-`hello-form.html`
+* `src` > `main` > `webapp` > `basic`
+    * `hello-form.html`
 
 ```html
 <!DOCTYPE html>
@@ -398,9 +390,9 @@ public class RequestBodyStringServlet extends HttpServlet {
 
 ### 8. HTTP 요청 데이터 - API 메시지 바디 - JSON
 
-`src` > `main` > `java` > `hello.servlet` > `basic`
+* `src` > `main` > `java` > `hello.servlet` > `basic`
+    * `HelloData`
 
-`HelloData`
 ```java
 package hello.servlet.basic;
 
@@ -437,3 +429,126 @@ public class RequestBodyJsonServlet extends HttpServlet {
 }
 ```
 ![request-api-message-body](./img/request-api-message-body.png)
+
+### 9. HttpServletResponse - 기본 사용법
+* #### HTTP 응답 메시지 생성
+    * HTTP 응답 코드 지정 (200, 404, 500, ...)
+    * 헤더 생성
+    * 바디 생성
+* #### 편의 기능 제공
+    * Content-Type, Cookie, Redirect
+
+
+* `src` > `main` > `java` > `hello.servlet` > `basic` > `response`
+    * `ResponseHeaderServlet`
+
+```java
+// ... 생략
+@WebServlet(name = "responseHeaderServlet", urlPatterns = "/response-header")
+public class ResponseHeaderServlet extends HttpServlet {
+    @Override
+    protected void service(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        // [status-line]
+        response.setStatus(HttpServletResponse.SC_OK);
+
+        // [response-headers]
+        response.setHeader("Content-Type", "text/plain;charset=utf-8");
+        response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        response.setHeader("Pragma", "no-cache");
+        response.setHeader("my-header", "hello");
+
+        PrintWriter writer = response.getWriter();
+        writer.println("ok");
+    }
+
+        private void content(HttpServletResponse response) {
+        // Content-Type: text/plain;charset=utf-8
+        // Content-Length: 2
+        // response.setHeader("Content-Type", "text/plain;charset=utf-8");
+        response.setContentType("text/plain");
+        response.setCharacterEncoding("utf-8");
+        // response.setContentLength(2); // 생략시 자동생성
+    }
+
+        private void cookie(HttpServletResponse response) {
+        Cookie cookie = new Cookie("myCookie", "good");
+        cookie.setMaxAge(600); // 600초
+        response.addCookie(cookie);
+    }
+
+        private void redirect(HttpServletResponse response) throws IOException {
+        // response.setStatus(HttpServletResponse.SC_FOUND); // 302
+        // response.setHeader("Location", "/basic/hello-form.html");
+        response.sendRedirect("/basic/hello-form.html");
+    }
+}
+```
+* `setHeader`로 자유롭게 헤더를 넣을 수 있다.
+![response-header](./img/response-header.png)
+* 아니면, `content` 클래스 처럼, `setContentType`, `setCharacterEncoding` 으로 지정할 수 있다.
+* `cookie` 클래스 -> Cookie 객체를 만들고, key, value 값을 지정, `setMaxAge`로 시간을 지정
+    * response에 `addCookie`를 지원해주기 때문에, 쿠키를 넣어줄 수 있다.
+    * 해당 쿠키는 `request.getCookies()`로 서버에서 사용 가능
+![response-cookie](./img/response-cookie.png)
+* `redirect` 클래스 -> 상태 코드가 302면서 Location 이기 때문에 리다이렉트 작용이 일어남
+    * 하지만, 번거롭기 때문에 `response.sendRedirect()`를 쓰자
+
+### 10. HTTP 응답 데이터 - 단순 텍스트, HTML
+* HTTP 응답 메시지는 주로 다음 내용을 담아서 전달한다
+    * 단순 텍스트 응답
+        * 앞에서 살펴봄 `(writer.println("ok"); )`
+    * HTML 응답
+    * HTTP API - MessageBody JSON 응답
+
+```java
+// ... 생략
+@WebServlet(name = "responseHtmlServlet", urlPatterns = "/response-html")
+public class ResponseHtmlServlet extends HttpServlet {
+    @Override
+    protected void service(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        // Content-Type: text/html;charset=utf-8
+        response.setContentType("text/html");
+        response.setCharacterEncoding("utf-8");
+
+        PrintWriter writer = response.getWriter();
+        writer.println("<html>");
+        writer.println("<body>");
+        writer.println("<div>안녕</div>");
+        writer.println("</body>");
+        writer.println("</html>");
+    }
+}
+```
+* `setContentType`, `setCharacterEncoding`을 통해 html로 반환 타입 지정, 인코딩 지정
+* `writer`를 활용하여 html을 반환하도록 한다
+    * HTTP 응답으로 HTML을 반환할 때는 `content-type`을 `text/html`로 지정해야한다
+![response-html](./img/response-html.png)
+
+### 11. HTTP 응답 데이터 - API JSON
+```java
+// ... 생략
+@WebServlet(name = "responseJsonServlet", urlPatterns = "/response-json")
+public class ResponseJsonServlet extends HttpServlet {
+
+    ObjectMapper objectMapper = new ObjectMapper();
+
+    @Override
+    protected void service(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        // Content-Type
+        response.setContentType("application/json");
+        response.setCharacterEncoding("utf-8");
+
+        HelloData helloData = new HelloData();
+        helloData.setUsername("kim");
+        helloData.setAge(20);
+
+        String result = objectMapper.writeValueAsString(helloData);
+
+        response.getWriter().write(result);
+    }
+}
+```
+* `application/json`은 스펙상 utf-8 형식을 사용하도록 정의되어있다.
+    * 그래서 `charset=utf-8` 같은 추가 파라미터를 지원하지 않기 때문에, `application/json` 이라고만 사용하면 된다.
+    
+![response-json](./img/response-json.png)
