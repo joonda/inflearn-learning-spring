@@ -356,3 +356,197 @@ implementation 'org.glassfish.web:jakarta.servlet.jsp.jstl'
 #### MVC 패턴 등장
 
 - Model, View, Controller
+
+### 4. MVC 패턴 - 개요
+
+#### 역할이 많아짐
+
+- 하나의 서블릿이나 JSP만으로 비즈니스 로직과 뷰 렌더링까지 모두 처리 시, 너무 많은 역할을 하게 됨
+  - 유지보수가 매우 어려워짐
+
+#### 변경 라이프 사이클
+
+- UI 일부 수정 및 비즈니스 로직 수정하는 것은 다르게 발생할 확률이 매우 높다
+  - 변경 라이프 사이클이 다른 부분을 하나의 파일로 관리하는 것은 충돌이 일어날 가능성이 매우 높다 (유지보수가 어렵다.)
+
+#### `Model`, `View`, `Controller`
+
+- `Controller`
+  - HTTP 요청을 받아서 파라미터 검증 및 비즈니스 로직 실행, `View`에 전달할 결과 데이터를 조회해서 `Model`에 담는다
+- `Model`
+  - `View`에 출력할 데이터를 담아둠, 화면 렌더링 하는 일에 집중 (`View`는 비즈니스 로직 및 데이터 접근에 대해 신경쓸 일이 없음)
+- `View`
+  - 모델에 담겨있는 데이터를 사용, 화면을 그리는 일에 집중, `HTML` 등을 칭함
+
+### 5. MVC 패턴 - 적용
+
+- 서블릿은 컨트롤러로 사용, JSP를 뷰로 사용하여 MVC 패턴을 적용
+- Model은 HttpServletRequest 객체를 사용, Request는 내부에 데이터 저장소를 가지고 있는데, `request.setAttribute()`, `request.getAttribute()`를 사용하면 데이터를 보관하고 조회할 수 있다.
+
+* `servlet` > `web` > `servletmvc`
+  - `MvcMemberFormServlet`
+
+```java
+// ... 생략
+@WebServlet(name = "mvcMemberFormServlet", urlPatterns = "/servlet-mvc/members/new-form")
+public class MvcMemberFormServlet extends HttpServlet {
+    @Override
+    protected void service(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        String viewPath = "/WEB-INF/views/new-form.jsp";
+        RequestDispatcher dispatcher = request.getRequestDispatcher(viewPath);
+        dispatcher.forward(request, response);
+    }
+}
+```
+
+- `RequestDispatcher dispatcher = request.getRequestDispatcher(viewPath);`
+  - `dispatcher.forward(request, response);`
+    - 다른 서블릿이나 JSP로 이동할 수 있는 기능, 서버 내부에서 다시 호출이 발생
+    - `/servlet-mvc/members/new-form` url로 요청시, 서버 내부에서 view path를 기반으로 다시 요청하여 jsp 파일을 뿌려준다.
+
+* `webapp` > `WEB-INF` > `views`
+  - `new-form.jsp`
+
+```jsp
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<form action="save" method="post">
+    username: <input type="text" name="username" />
+    age:      <input type="text" name="age" />
+    <button type="submit">전송</button>
+</form>
+</body>
+</html>
+```
+
+#### redirect vs. forward
+
+- redirect는 실제 클라이언트에 응답이 나갔다가, 클라이언트가 redirect 경로로 다시 요청
+  - 클라이언트 인지가 가능, URL도 변경
+- forward는 서버 내부에서 일어나는 호출
+
+  - 서버 내부에서 일어나는 호출이기 때문에 클라이언트가 전혀 인지하지 못함.
+
+- `servlet` > `web` > `servletmvc`
+  - `MvcMemberSaveServlet`
+
+```java
+// ... 생략
+@WebServlet(name = "mvcMemberSaveServlet", urlPatterns = "/servlet-mvc/members/save")
+public class MvcMemberSaveServlet extends HttpServlet {
+
+    private MemberRepository memberRepository = MemberRepository.getInstance();
+
+    @Override
+    protected void service(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        String username = request.getParameter("username");
+        int age = Integer.parseInt(request.getParameter("age"));
+
+        Member member = new Member(username, age);
+        memberRepository.save(member);
+
+        // Model에 데이터 보관
+        request.setAttribute("member", member);
+
+        String viewPath = "/WEB-INF/views/save-result.jsp";
+        request.getRequestDispatcher(viewPath).forward(request, response);
+    }
+}
+```
+
+- `setAttribute()`가 Model 역할을 담당한다 (데이터를 일시 보관)
+
+- `webapp` > `WEB-INF` > `views`
+  - `new-form.jsp`
+
+```jsp
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<html>
+<head>
+  <title>Title</title>
+</head>
+<body>
+성공
+<ul>
+  <li>id=${member.id}</li>
+  <li>username=${member.username}</li>
+  <li>age=${member.age}</li>
+</ul>
+<a href="/index.html">go to main</a>
+</body>
+</html>
+```
+
+- `MvcMemberSaveServlet`에서 `model`에 담았던 `member`를 받아와서 출력.
+
+* `servlet` > `web` > `servletmvc`
+  - `MvcMemberListServlet`
+
+```java
+// ... 생략
+@WebServlet(name = "mvcMemberListServlet", urlPatterns = "/servlet-mvc/members")
+public class MvcMemberListServlet extends HttpServlet {
+
+    private MemberRepository memberRepository = MemberRepository.getInstance();
+
+    @Override
+    protected void service(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        List<Member> members = memberRepository.findAll();
+
+        request.setAttribute("members", members);
+        String viewPath = "/WEB-INF/views/members.jsp";
+        request.getRequestDispatcher(viewPath).forward(request, response);
+    }
+}
+```
+
+- `MvcMemberSaveServlet`과 동일하게 `request.setAttribute`를 활용하여 멤버 목록을 담는다.
+
+* `webapp` > `WEB-INF` > `views`
+  - `members.jsp`
+
+```jsp
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core"%>
+
+<html>
+<head>
+    <title>Title</title>
+</head>
+<body>
+<a href="/index.html">go to main</a>
+<table>
+    <thead>
+    <th>id</th>
+    <th>username</th>
+    <th>age</th>
+    </thead>
+    <tbody>
+    <c:forEach var="item" items="${members}">
+        <tr>
+            <td>${item.id}</td>
+            <td>${item.username}</td>
+            <td>${item.age}</td>
+        </tr>
+    </c:forEach>
+    </tbody>
+</table>
+</body>
+</html>
+```
+
+- `taglib`인 `jstl`을 활용하여 데이터를 뽑아낼 수 있다.
+
+### 6. MVC 패턴 - 한계
+
+- MVC 패턴을 적용한 덕분에 컨트롤러의 역할과 뷰를 렌더링 하는 역할을 명확하게 구분 가능
+- 컨트롤러는 중복이 많고, 필요없는 코드도 많아보임 (반복되는 `request.setAttribute` 등...)
+
+* 공통 처리가 어렵다
+  - 컨트롤러 호출 전, 공통 기능을 처리하는 수문장이 필요, Front Controller 패턴을 도입하면 해당 문제를 깔끔하게 해결
+  - 스프링 MVC의 핵심도 이 프론트 컨트롤러에 존재한다.
