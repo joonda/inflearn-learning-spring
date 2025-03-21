@@ -227,3 +227,132 @@ public class MemberListServlet extends HttpServlet {
 - response, request 등으로 주고받는 것은 좋은데, html을 일일히 손수 짜야한다는 것이 매우 에러.
   - 템플릿 엔진을 사용하는 것이 좋음.
     - `JSP`, `Thymeleaf`, `Freemarker`, `Velocity` 등이 있다.
+
+### 3. JSP로 회원 관리 웹 애플리케이션 만들기
+
+- `build.gradle`
+
+```
+implementation 'org.apache.tomcat.embed:tomcat-embed-jasper'
+implementation 'jakarta.servlet:jakarta.servlet-api'
+implementation 'jakarta.servlet.jsp.jstl:jakarta.servlet.jsp.jstl-api'
+implementation 'org.glassfish.web:jakarta.servlet.jsp.jstl'
+```
+
+- JSP 관련 의존성 추가.
+
+#### JSP 파일 만들기
+
+- `webapp` > `jsp` > `members`
+  - `new-form.jsp`
+
+```jsp
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<html>
+<head>
+    <title>Title</title>
+</head>
+<body>
+<form action="/jsp/members/save.jsp" method="post">
+    username: <input type="text" name="username" />
+    age:      <input type="text" name="age" />
+    <button type="submit">전송</button>
+</form>
+</body>
+</html>
+```
+
+- `http://localhost:8080/jsp/members/new-form.jsp` 로 바로 들어갈 수 있다.
+- `webapp` 폴더 밑으로 폴더 경로를 따라서 url이 생성된다
+
+- `webapp` > `jsp` > `members`
+  - `save.jsp`
+
+```jsp
+<%@ page import="hello.servlet.domain.member.Member" %>
+<%@ page import="hello.servlet.domain.member.MemberRepository" %>
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<%
+    MemberRepository memberRepository = MemberRepository.getInstance();
+
+    String username = request.getParameter("username");
+    int age = Integer.parseInt(request.getParameter("age"));
+
+    Member member = new Member(username, age);
+    memberRepository.save(member);
+%>
+<html>
+<head>
+    <title>Title</title>
+</head>
+<body>
+성공
+<ul>
+    <li>id=<%=member.getId()%></li>
+    <li>username=<%=member.getUsername()%></li>
+    <li>age=<%=member.getAge()%></li>
+</ul>
+<a href="/index.html">go to main</a>
+</body>
+</html>
+
+```
+
+- `jsp`에서 `request`, `response`는 그냥 예약어로 사용가능
+
+  - `jsp`도 결국 서블릿으로 바뀌기 때문에, 서비스 로직이 그대로 호출
+
+- `webapp` > `jsp`
+  - `members.jsp`
+
+```jsp
+<%@ page import="java.util.List" %>
+<%@ page import="hello.servlet.domain.member.Member" %>
+<%@ page import="hello.servlet.domain.member.MemberRepository" %>
+<%
+    MemberRepository memberRepository = MemberRepository.getInstance();
+    List<Member> members = memberRepository.findAll();
+%>
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<html>
+<head>
+    <title>Title</title>
+</head>
+<body>
+<a href="/index.html">go to main</a>
+<table>
+    <thead>
+    <th>id</th>
+    <th>username</th>
+    <th>age</th>
+    </thead>
+    <tbody>
+    <%
+        for (Member member : members) {
+            out.write("<tr>");
+            out.write("<td>" + member.getId() + "</td>");
+            out.write("<td>" + member.getUsername() + "</td>");
+            out.write("<td>" + member.getAge() + "</td>");
+            out.write("</tr>");
+        }
+    %>
+    </tbody>
+</table>
+</body>
+</html>
+```
+
+- `<% ~~~ %>`로 자바 코드를 돌릴 수 있다 (for문 등)
+  - out은 예약어로, 바로 사용가능 `println()` 개념
+- `<%= ~~~ %>`
+  - 자바 코드 출력
+
+#### 서블릿과 JSP의 한계
+
+- 서블릿으로 개발 시, `View` 화면을 위한 `HTML`을 만드는 작업이 자바 코드에 섞여 지저분, 복잡
+- `JSP`를 사용한 덕분에 `View`를 생성하는 `HTML` 작업을 깔끔 -> 동적 변경 필요한 부분만 자바 코드 적용 하지만 여기서도 문제가 존재
+  - 간단한 개발인데도 자바코드 반, 뷰 영역 반을 차지한다 즉, 조금만 규모가 커지면 유지보수가 지옥이 될 것..
+
+#### MVC 패턴 등장
+
+- Model, View, Controller
