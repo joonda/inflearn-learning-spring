@@ -358,3 +358,31 @@ public class RequestParamController {
 - `http://localhost:8080/basic/hello-form.html` 엔드포인트에서 `username`, `age` 정보를 입력 후 전송
   - `/request-param-v1`으로 이동하며 (Form의 영향) `username`, `age`의 정보가 `log`로 찍힌다
 - 또는 `http://localhost:8080/request-param-v1?username=Lee&age=20` 이렇게 쿼리 파라미터로 엔드포인트를 이동해도 log가 찍힌다.
+
+### 7. HTTP 요청 파라미터 - @RequestParam
+
+- `hello` > `springmvc` > `basic` > `request`
+  - `RequestParamController`
+
+```java
+// ... 생략
+@Slf4j
+@Controller
+public class RequestParamController {
+
+    // ... 생략
+    @ResponseBody
+    @RequestMapping("/request-param-v2")
+    public String requestParamV2(
+            @RequestParam("username") String memberName,
+            @RequestParam("age") int memberAge) {
+
+        log.info("memberName = {}, memberAge = {}", memberName, memberAge);
+
+        return "ok";
+    }
+}
+```
+
+- `@RequestParam` : 파라미터 이름으로 바인딩
+- `@ResponseBody` : View 조회를 무시하고, HTTP message body에 직접 해당 내용을 입력
